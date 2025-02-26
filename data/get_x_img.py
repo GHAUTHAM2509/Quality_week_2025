@@ -3,9 +3,9 @@ import random
 import shutil
 
 # Directory containing the images
-SOURCE_DIR = 'Video_train/real_img'
+SOURCE_DIR = 'Video_train_img/AI'
 # Directory to store the selected images
-DEST_DIR = 'vt25/real'
+DEST_DIR = 'vt25/AI'
 
 # Number of images to select
 NUM_IMAGES = 25000

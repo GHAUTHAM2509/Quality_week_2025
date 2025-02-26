@@ -9,6 +9,12 @@ from tensorflow.keras.optimizers.schedules import ExponentialDecay
 from tensorflow.keras.utils import plot_model
 from tensorflow.keras.models import load_model
 from sklearn.metrics import classification_report
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, BatchNormalization, Dense, Flatten
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dropout, concatenate, ReLU, Add
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import AdamW
+from tensorflow.keras.callbacks import ReduceLROnPlateau
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -19,7 +25,7 @@ from datetime import datetime
 import os
 import pickle
 
-IMG_WIDTH = 128
+IMG_WIDTH = 256
 
 def get_datagen(use_default_augmentation=True, **kwargs):
     kwargs.update({'rescale': 1./255})
@@ -134,6 +140,53 @@ def build_model(ip=Input(shape=(IMG_WIDTH, IMG_WIDTH, 3)),
 
     return model
 
+# ✅ Inception Block with Residual Connection
+def inception_block(x, filters):
+    path1 = Conv2D(filters, (1, 1), padding="same", activation="swish")(x)
+    
+    path2 = Conv2D(filters, (3, 3), padding="same", activation="swish")(x)
+
+    path3 = Conv2D(filters, (5, 5), padding="same", activation="swish")(x)
+
+    path4 = Conv2D(filters, (1, 1), padding="same", activation="swish")(x)
+    path4 = Conv2D(filters, (3, 3), padding="same", activation="swish")(path4)
+
+    output = concatenate([path1, path2, path3, path4], axis=-1)
+    output = BatchNormalization()(output)
+
+    # ✅ Residual connection
+    if x.shape[-1] == output.shape[-1]:  
+        output = Add()([x, output])
+
+    return output
+
+# ✅ Build MesoInception-4 Model
+def build_mesonet():
+    ip = Input(shape=(256, 256, 3))
+
+    x = Conv2D(8, (3, 3), padding="same", activation="swish")(ip)
+    x = BatchNormalization()(x)
+
+    x = inception_block(x, filters=8)
+    x = inception_block(x, filters=16)
+    
+    x = Conv2D(16, (3, 3), padding="same", activation="swish")(x)
+    x = BatchNormalization()(x)
+    
+    x = GlobalAveragePooling2D()(x)
+    
+    # ✅ DropBlock instead of Dropout
+    x = Dropout(0.3)(x)
+
+    x = Dense(16, activation="swish")(x)
+    x = Dropout(0.3)(x)
+
+    op_layer = Dense(1, activation="sigmoid")(x)
+
+    model = Model(ip, op_layer)
+    
+    return model
+
 def evaluate_model(model, test_data_dir, batch_size):
     data = get_test_data_generator(test_data_dir, batch_size)
     return model.evaluate(data)
@@ -221,7 +274,7 @@ def train_model(model,
                 batch_size=256,
                 use_default_augmentation=True,
                 augmentations=None,
-                epochs=10,
+                epochs=25,
                 lr=1e-3,
                 loss='binary_crossentropy',
                 compile=True,
@@ -307,12 +360,16 @@ def temp(test_data_dir, batch_size, shuffle=False):
         shuffle=shuffle
     )
 
+
+
 def main():
+    # train_generator, _ = get_train_data_generator('vt25/', batch_size=32)
+    # print(train_generator.class_indices)
     # train_data_dir = 'vt25/'
-    # val_split, epochs, batch_size = 0.20, 10, 256
+    # val_split, epochs, batch_size = 0.20, 5, 256
     # decay_rate, decay_limit = 0.10, 1e-6
     
-    # model = build_model()
+    # model = build_mesonet()
     # history = train_model(
     #     model,
     #     train_data_dir,
@@ -325,18 +382,33 @@ def main():
     # return model, history  # Ensure history is returned
 
 
-    model_exp = load_model('run_20250225-165118_best_model.keras')
-    data = temp('reall', 64)
+    model_exp = load_model('run_20250226-175918_best_model.keras')
+    
+
+    # for video in os.listdir('test25/AI'):
+    #     if video == '.DS_Store':
+    #         continue
+    #     data = temp(f'test25/AI/{video}', 64)
+    #     predictions = model_exp.predict(data)
+    #     # print(data)
+    #     # print(predictions)
+    #     if predictions.mean() > 0.5:
+    #         print('Real')
+    #     else:
+    #         print('Fake')
+
+    data = temp('putin/',64)
     predictions = model_exp.predict(data)
     print(predictions)
+    print(data.classes)
     if predictions.mean() > 0.5:
         print('Real')
     else:
         print('Fake')
 
-    # model_exp = load_model('run_20250225-165118_best_model.keras')
-    # evaluate_model(model_exp, 'Video_train_img', 64)
-    # print(get_classification_report(model_exp, 'Video_train_img'))
+    # model_exp = load_model('run_20250226-175918_best_model.keras')
+    #evaluate_model(model_exp, 'Video_train_img', 64)
+    #print(get_classification_report(model_exp, 'Video_train_img'))
     #print(get_classification_report(model_exp, 'data_test', 64))
     # # manual testing
     # model_exp = load_model('run_20250224-234218_best_model.keras')

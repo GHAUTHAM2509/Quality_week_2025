@@ -15,6 +15,10 @@ for video in "$VIDEO_DIR"/*.{mp4,mov,avi,mkv}; do
   # Remove the file extension
   base_name="${base_name%.*}"
 
+  # Create a subdirectory for the current video file's images
+  video_image_dir="$IMAGE_DIR/"
+  #mkdir -p "$video_image_dir"
+
   # Use ffmpeg to split the video into images
-  ffmpeg -i "$video" -vf "fps=5" "$IMAGE_DIR/${base_name}_%04d.jpg"
+  ffmpeg -i "$video" -vf "fps=5" "$video_image_dir/${base_name}_%04d.jpg"
 done
